@@ -6,15 +6,29 @@
 
 - 通过在指定路径创建`JSON`实现接口自动生成
 
-### 创建模拟 API
+### 模拟 API
 
-- 在`seapig-mock`创建`JSON`文件，即可自动生成可访问的`API`接口
+- 调用创建模拟`API`的接口，即可自动生成可访问的`API`接口
+
+- 只支持`POST`方法，支持以下几种接口，后缀为`get-mock`, `create-mock`, `delete-mock`, `delete-mock-all`的方法
+
+  - 查询所有可用的`MOCK-API`: `http://localhost:8080/get-mock`
+
+  - 新增（覆盖）可用的`MOCK-API`: `http://localhost:8080/power/mock-api/create-mock`
+
+    - 新增完成后，通过去掉后缀`create-mock`即可正常调用，如：`http://localhost:8080/power/mock-api`
+
+  - 删除可用的`MOCK-API`: `http://localhost:8080/power/mock-api/delete-mock`
+
+  - 查询所有可用的`MOCK-API`: `http://localhost:8080/delete-mock-all`
 
 #### 使用案例
 
-1. 在`seapig-mock`中创建文件夹`demo`，并继续往下创建`test.json`文件，最终文件路径为`seapig-mock/demo/test.json`
+- 通过`Postman`等工具调用接口
 
-2. 在`JSON`文件中写入数据
+1. 新增`MOCK-API`
+
+只支持`POST`方法，调用接口`http://localhost:8080/power/mock-api/create-mock`，在`body`中写入以下数据
 
 ```json
 {
@@ -24,9 +38,9 @@
 }
 ```
 
-3. 通过`Postman`等工具调用接口
+2. 使用`MOCK-API`
 
-只支持`POST`方法，调用接口`http://localhost:8080/demo/test`，即可正常运行
+只支持`POST`方法，调用接口`http://localhost:8080/power/mock-api`
 
 ## 高级用法
 

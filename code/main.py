@@ -57,6 +57,8 @@ class JsonEncoder(json.JSONEncoder):
             return o.strftime("%Y-%m-%d")
         elif isinstance(o, uuid.UUID):
             return o.hex
+        elif isinstance(o, Enum):
+            return o.value
         super(JsonEncoder, self).default(o)
 
 
@@ -119,11 +121,30 @@ class MockHandler(BaseHandler):
             else:
                 # 不存在则走模拟数据库，“增删改查”的逻辑
                 valid_operation = ["create", "page"]
+                mock_operation = ["get-mock", "create-mock",
+                                  "delete-mock", "delete-mock-all"]
                 dir_path = os.path.dirname(path)
                 base_path = os.path.basename(path)
                 operation = base_path
+
+                # 如果是 MOCK 操作则放行到 MOCK 逻辑中
+                if operation in mock_operation:
+                    # MOCK 文件路径
+                    mock_path = f"{self.mock_dir}/{dir_path}.json"
+
+                    if operation == "get-mock":
+                        self.get_mock()
+                    elif operation == "create-mock":
+                        self.create_mock(mock_path, data)
+                    elif operation == "delete-mock":
+                        self.delete_mock(mock_path)
+                    elif operation == "delete-mock-all":
+                        self.delete_mock_all()
+                    else:
+                        pass
+
                 # 判断为有效操作才允许进入“增删改查”逻辑
-                if operation in valid_operation:
+                elif operation in valid_operation:
                     # 模拟数据库文件路径
                     db_path = f"{self.db_dir}/{dir_path}/data.db"
 
@@ -200,6 +221,44 @@ class MockHandler(BaseHandler):
             self.write(json.dumps(
                 {"code": StatusCode.BAD_REQUEST, "msg": str(e), "data": {}}, cls=JsonEncoder))
             traceback.print_exc()
+
+    def get_mock(self):
+        # 获取已有的所有 MOCK API（文件路径）
+        mock_api_list = common.get_mock_api_list(self.mock_dir)
+        self.write(json.dumps(
+            {"code": StatusCode.OK, "msg": "当前有效的 API 清单", "data": mock_api_list}, cls=JsonEncoder))
+
+    def create_mock(self, mock_path, data):
+        # 创建或者覆盖 MOCK API（文件路径）
+
+        # 首先创建或者覆盖文件夹
+        os.makedirs(os.path.dirname(mock_path), exist_ok=True)
+        json_data = json.dumps(data, cls=JsonEncoder)
+
+        # 将数据写入指定文件路径
+        common.write_file(mock_path, json_data)
+        self.write(json.dumps(
+            {"code": StatusCode.OK, "msg": None, "data": {}}, cls=JsonEncoder))
+
+    def delete_mock(self, mock_path):
+        # 删除一个 MOCK API（文件路径）
+
+        file_list = common.get_file_path_list(self.mock_dir)
+        if mock_path in file_list:
+            # 删除文件
+            os.remove(mock_path)
+            self.write(json.dumps(
+                {"code": StatusCode.OK, "msg": "删除成功", "data": {}}, cls=JsonEncoder))
+
+        else:
+            self.write(json.dumps(
+                {"code": StatusCode.NO_CONTENT, "msg": "不存在待删除的 API，无需删除", "data": {}}, cls=JsonEncoder))
+
+    def delete_mock_all(self):
+        # 删除所有 MOCK API（文件路径），包括整个文件夹
+        common.clear_folder(self.mock_dir)
+        self.write(json.dumps(
+            {"code": StatusCode.OK, "msg": "删除成功", "data": {}}, cls=JsonEncoder))
 
     def trigger_get(self, db_path, data):
         # 触发获取方法
