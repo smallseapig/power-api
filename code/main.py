@@ -40,7 +40,7 @@ class BaseHandler(tornado.web.RequestHandler):
         self.set_header("Access-Control-Allow-Methods",
                         "GET, POST, PUT, DELETE, OPTIONS")
 
-    def options(self):
+    def options(self, *args):
         # 处理预检请求
         self.set_status(204)
         self.finish()
