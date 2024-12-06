@@ -106,9 +106,6 @@ class MockHandler(BaseHandler):
     def post(self, path):
         try:
             data = json.loads(self.request.body) if self.request.body else {}
-            random_id = uuid.uuid1()
-            create_time = common.get_current_time()
-            remote_ip = self.request.remote_ip
 
             # 构建完整文件路径
             full_path = f"{self.mock_dir}/{path}.json"
@@ -116,12 +113,20 @@ class MockHandler(BaseHandler):
             # 检查文件是否存在
             if os.path.exists(full_path):
                 # 存在则直接走获取文件数据的逻辑
-                self.write(json.dumps(seapig_mock.mock(
-                    full_path), cls=JsonEncoder))
+
+                # 判断数据格式是否为定制化数据，定制化数据则走分页逻辑
+                exist_content = seapig_mock.mock(full_path)
+                if isinstance(exist_content, dict) and isinstance(exist_content.get("data", {}).get("records"), list):
+                    self.write(json.dumps(seapig_mock.seapig_query(
+                        full_path, data), cls=JsonEncoder))
+                else:
+                    # 不为定制格式数据则直接返回
+                    self.write(json.dumps(exist_content, cls=JsonEncoder))
+
             else:
                 # 不存在则走模拟数据库，“增删改查”的逻辑
                 valid_operation = ["create", "page"]
-                mock_operation = ["get-mock", "create-mock",
+                mock_operation = ["get-mock", "create-mock", "append-mock",
                                   "delete-mock", "delete-mock-all"]
                 dir_path = os.path.dirname(path)
                 base_path = os.path.basename(path)
@@ -136,6 +141,8 @@ class MockHandler(BaseHandler):
                         self.get_mock()
                     elif operation == "create-mock":
                         self.create_mock(mock_path, data)
+                    elif operation == "append-mock":
+                        self.append_mock(mock_path, data)
                     elif operation == "delete-mock":
                         self.delete_mock(mock_path)
                     elif operation == "delete-mock-all":
@@ -150,8 +157,7 @@ class MockHandler(BaseHandler):
 
                     # 根据不同的操作，触发不同的方法
                     if operation == "create":
-                        self.trigger_create(
-                            db_path, {**data, "id": random_id, "ip_addr": remote_ip, "create_time": create_time})
+                        self.trigger_create(db_path, data)
                     elif operation == "page":
                         self.trigger_page(db_path, data)
                     else:
@@ -231,7 +237,7 @@ class MockHandler(BaseHandler):
     def create_mock(self, mock_path, data):
         # 创建或者覆盖 MOCK API（文件路径）
 
-        # 首先创建或者覆盖文件夹
+        # 首先，如果文件夹不存在，则创建文件夹
         os.makedirs(os.path.dirname(mock_path), exist_ok=True)
         json_data = json.dumps(data, cls=JsonEncoder)
 
@@ -239,6 +245,59 @@ class MockHandler(BaseHandler):
         common.write_file(mock_path, json_data)
         self.write(json.dumps(
             {"code": StatusCode.OK, "msg": None, "data": {}}, cls=JsonEncoder))
+
+    def append_mock(self, mock_path, data):
+        # 这是一个专门定制的接口，追加数据到 MOCK API（文件路径）
+
+        # 首先，判断文件存不存在
+        if os.path.exists(mock_path):
+            # 第二，判断数据结构是否符合定制化要求
+            # 如果已有的数据结构符合要求的，则追加数据
+            exist_content = seapig_mock.mock(mock_path)
+            if isinstance(exist_content, dict) and isinstance(exist_content.get("data", {}).get("records"), list):
+                # 已有的数据结构符合要求后，需要判断新增的数据格式，根据不同的数据类型进行追加
+                # 情况一：数据为列表
+                if isinstance(data, list):
+                    exist_content["data"]["records"] = data + \
+                        exist_content["data"]["records"]
+                    json_data = json.dumps(exist_content, cls=JsonEncoder)
+                    # 重写文件内容
+                    common.write_file(mock_path, json_data)
+                    self.write(json.dumps(
+                        {"code": StatusCode.OK, "msg": None, "data": {}}, cls=JsonEncoder))
+
+                # 情况二：指定数据格式为列表
+                elif isinstance(data.get("data", {}).get("records"), list):
+                    exist_content["data"]["records"] = data.get("data", {}).get(
+                        "records") + exist_content["data"]["records"]
+                    json_data = json.dumps(exist_content, cls=JsonEncoder)
+                    # 重写文件内容
+                    common.write_file(mock_path, json_data)
+                    self.write(json.dumps(
+                        {"code": StatusCode.OK, "msg": None, "data": {}}, cls=JsonEncoder))
+
+                # 情况三：常规数据，任意格式都可，直接塞到 records 中去
+                else:
+                    exist_content["data"]["records"] = [
+                        data] + exist_content["data"]["records"]
+                    json_data = json.dumps(exist_content, cls=JsonEncoder)
+                    # 重写文件内容
+                    common.write_file(mock_path, json_data)
+                    self.write(json.dumps(
+                        {"code": StatusCode.OK, "msg": None, "data": {}}, cls=JsonEncoder))
+
+            else:
+                self.write(json.dumps(
+                    {"code": StatusCode.BAD_REQUEST, "msg": "只支持定制数据结构追加数据", "data": {}}, cls=JsonEncoder))
+        else:
+            # 文件夹不存在，则创建文件夹
+            os.makedirs(os.path.dirname(mock_path), exist_ok=True)
+
+            # 将数据写入指定文件路径
+            json_data = json.dumps(data, cls=JsonEncoder)
+            common.write_file(mock_path, json_data)
+            self.write(json.dumps(
+                {"code": StatusCode.OK, "msg": None, "data": {}}, cls=JsonEncoder))
 
     def delete_mock(self, mock_path):
         # 删除一个 MOCK API（文件路径）
@@ -294,7 +353,7 @@ class MockHandler(BaseHandler):
                             self.write(json.dumps(
                                 {"code": StatusCode.OK, "msg": None, "data": match_get_list[0]}, cls=JsonEncoder))
                         else:
-                            # 有多个值时返回一个数组
+                            # 有多个值时返回一个列表
                             self.write(json.dumps(
                                 {"code": StatusCode.OK, "msg": None, "data": match_get_list}, cls=JsonEncoder))
 
@@ -316,25 +375,82 @@ class MockHandler(BaseHandler):
     def trigger_create(self, db_path, data):
         # 触发新增方法
 
+        create_time = common.get_current_time()
+        remote_ip = self.request.remote_ip
+
         # 检查模拟数据库文件是否存在
         if os.path.exists(db_path):
-            # 存在则直接使用，在原有的数组中推入新的数据
+            # 存在则直接使用，在原有的列表中推入新的数据
             data_list = common.get_context_list(db_path)
-            # 插入新值
-            data_list.insert(0, data)
-            json_data = json.dumps(data_list, cls=JsonEncoder)
-            # 重写文件内容
-            common.write_file(db_path, json_data)
-            self.write(json.dumps(
-                {"code": StatusCode.OK, "msg": None, "data": data.get("id")}, cls=JsonEncoder))
+
+            # 处理数据时，分三种情况
+            # 情况一：数据为列表
+            if isinstance(data, list):
+                # 插入批量新值，并在每项值中插入 ID、IP 和时间
+                aggregation = [{**i, "id": uuid.uuid1(), "ip_addr": remote_ip,
+                                "create_time": create_time} for i in data] + data_list
+                json_data = json.dumps(aggregation, cls=JsonEncoder)
+                # 重写文件内容
+                common.write_file(db_path, json_data)
+                self.write(json.dumps(
+                    {"code": StatusCode.OK, "msg": None, "data": {}}, cls=JsonEncoder))
+
+            # 情况二：指定数据格式为列表
+            elif isinstance(data.get("data", {}).get("records"), list):
+                # 插入批量新值，并在每项值中插入 ID、IP 和时间
+                aggregation = [{**i, "id": uuid.uuid1(), "ip_addr": remote_ip, "create_time": create_time}
+                               for i in data.get("data", {}).get("records")] + data_list
+                json_data = json.dumps(aggregation, cls=JsonEncoder)
+                # 重写文件内容
+                common.write_file(db_path, json_data)
+                self.write(json.dumps(
+                    {"code": StatusCode.OK, "msg": None, "data": {}}, cls=JsonEncoder))
+
+            # 情况三：常规数据，任意格式都可，直接保存
+            else:
+                random_id = uuid.uuid1()
+                # 插入新值
+                data_list.insert(
+                    0, {**data, "id": random_id, "ip_addr": remote_ip, "create_time": create_time})
+                json_data = json.dumps(data_list, cls=JsonEncoder)
+                # 重写文件内容
+                common.write_file(db_path, json_data)
+                self.write(json.dumps(
+                    {"code": StatusCode.OK, "msg": None, "data": random_id}, cls=JsonEncoder))
 
         else:
             # 不存在，则先创建目录，再写入文件
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
-            json_data = json.dumps(data, cls=JsonEncoder)
-            common.write_file(db_path, f"[{json_data}]")
-            self.write(json.dumps(
-                {"code": StatusCode.OK, "msg": None, "data": data.get("id")}, cls=JsonEncoder))
+
+            # 处理数据时，分三种情况
+            # 情况一：数据为列表
+            if isinstance(data, list):
+                # 在每项值中插入 ID、IP 和时间
+                aggregation = [{**i, "id": uuid.uuid1(), "ip_addr": remote_ip, "create_time": create_time}
+                               for i in data]
+                json_data = json.dumps(aggregation, cls=JsonEncoder)
+                common.write_file(db_path, json_data)
+                self.write(json.dumps(
+                    {"code": StatusCode.OK, "msg": None, "data": {}}, cls=JsonEncoder))
+
+            # 情况二：指定数据格式为列表
+            elif isinstance(data.get("data", {}).get("records"), list):
+                # 在每项值中插入 ID、IP 和时间
+                aggregation = [{**i, "id": uuid.uuid1(), "ip_addr": remote_ip, "create_time": create_time}
+                               for i in data.get("data", {}).get("records")]
+                json_data = json.dumps(aggregation, cls=JsonEncoder)
+                common.write_file(db_path, json_data)
+                self.write(json.dumps(
+                    {"code": StatusCode.OK, "msg": None, "data": {}}, cls=JsonEncoder))
+
+            # 情况三：常规数据，任意格式都可，直接保存
+            else:
+                random_id = uuid.uuid1()
+                json_data = json.dumps(
+                    {**data, "id": random_id, "ip_addr": remote_ip, "create_time": create_time}, cls=JsonEncoder)
+                common.write_file(db_path, f"[{json_data}]")
+                self.write(json.dumps(
+                    {"code": StatusCode.OK, "msg": None, "data": random_id}, cls=JsonEncoder))
 
     def trigger_page(self, db_path, data):
         # 触发查询方法

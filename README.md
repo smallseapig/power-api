@@ -10,7 +10,7 @@
 
 - 调用创建模拟`API`的接口，即可自动生成可访问的`API`接口
 
-- 只支持`POST`方法，支持以下几种接口，后缀为`get-mock`, `create-mock`, `delete-mock`, `delete-mock-all`的方法
+- 只支持`POST`方法，支持以下几种接口，后缀为`get-mock`, `create-mock`, `delete-mock`, `delete-mock-all`，`append-mock`的方法
 
   - 查询所有可用的`MOCK-API`: `http://localhost:8080/get-mock`
 
@@ -21,6 +21,32 @@
   - 删除可用的`MOCK-API`: `http://localhost:8080/power/mock-api/delete-mock`
 
   - 查询所有可用的`MOCK-API`: `http://localhost:8080/delete-mock-all`
+
+  - 【高定制功能】针对定制数据结构，支持`数据追加`和`分页查询`
+
+    - 定制的数据结构为`xxx.data.records`，示例如下：
+
+    ```json
+    {
+        "code": 0,
+        "msg": "查询成功！",
+        "data": {
+            "records": [
+                { "id": "1864592907632418825" },
+                { "id": "1864592907632418825" }
+            ],
+            "total": 220,
+            "size": 10,
+            "current": 1,
+            "pages": 22,
+            "tag": null
+        }
+    }
+    ```
+
+    - 追加数据: `http://localhost:8080/power/mock-api/append-mock`
+
+    - 分页查询：针对定制化数据，默认支持分页查询和条件查询，如：`http://localhost:8080/power/mock-api`，如果数据为常规数据，会自动切换为普通的`MOCK-API`
 
 #### 使用案例
 
