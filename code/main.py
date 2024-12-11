@@ -79,33 +79,8 @@ class MockHandler(BaseHandler):
     def get(self, path):
         try:
             data = json.loads(self.request.body) if self.request.body else {}
-            get_id = self.get_argument('id', '')
-
-            valid_operation = ["get"]
-            dir_path = os.path.dirname(path)
-            base_path = os.path.basename(path)
-            operation = base_path
-            # 只匹配 get 后缀的接口
-            if operation in valid_operation:
-                db_path = f"{self.db_dir}/{dir_path}/data.db"
-
-                # 根据不同的操作，触发不同的方法
-                if operation == "get":
-                    self.trigger_get(db_path, {**data, "get_id": get_id})
-                else:
-                    pass
-            else:
-                self.write(json.dumps(
-                    {"code": StatusCode.NOT_FOUND, "msg": "API 不存在", "data": {}}, cls=JsonEncoder))
-
-        except Exception as e:
-            self.write(json.dumps(
-                {"code": StatusCode.BAD_REQUEST, "msg": str(e), "data": {}}, cls=JsonEncoder))
-            traceback.print_exc()
-
-    def post(self, path):
-        try:
-            data = json.loads(self.request.body) if self.request.body else {}
+            params = {key: self.get_query_argument(
+                key) for key in self.request.query_arguments}
 
             # 构建完整文件路径
             full_path = f"{self.mock_dir}/{path}.json"
@@ -116,13 +91,59 @@ class MockHandler(BaseHandler):
 
                 # 判断数据格式是否为定制化数据，定制化数据则走分页逻辑
                 exist_content = seapig_mock.mock(full_path)
-                if isinstance(exist_content, dict) and isinstance(exist_content.get("data", {}).get("records"), list):
+                if isinstance(exist_content, dict) and isinstance(exist_content.get("data", {}), dict) and isinstance(exist_content.get("data", {}).get("records"), list):
                     self.write(json.dumps(seapig_mock.seapig_query(
-                        full_path, data), cls=JsonEncoder))
+                        full_path, {**data, **params}), cls=JsonEncoder))
                 else:
                     # 不为定制格式数据则直接返回
                     self.write(json.dumps(exist_content, cls=JsonEncoder))
+            else:
+                # 不存在则走模拟数据库的逻辑
+                get_id = self.get_argument('id', '')
 
+                valid_operation = ["get"]
+                dir_path = os.path.dirname(path)
+                base_path = os.path.basename(path)
+                operation = base_path
+                # 只匹配 get 后缀的接口
+                if operation in valid_operation:
+                    db_path = f"{self.db_dir}/{dir_path}/data.db"
+
+                    # 根据不同的操作，触发不同的方法
+                    if operation == "get":
+                        self.trigger_get(db_path, {**data, "get_id": get_id})
+                    else:
+                        pass
+                else:
+                    self.write(json.dumps(
+                        {"code": StatusCode.NOT_FOUND, "msg": "API 不存在", "data": {}}, cls=JsonEncoder))
+
+        except Exception as e:
+            self.write(json.dumps(
+                {"code": StatusCode.BAD_REQUEST, "msg": str(e), "data": {}}, cls=JsonEncoder))
+            traceback.print_exc()
+
+    def post(self, path):
+        try:
+            data = json.loads(self.request.body) if self.request.body else {}
+            params = {key: self.get_query_argument(
+                key) for key in self.request.query_arguments}
+
+            # 构建完整文件路径
+            full_path = f"{self.mock_dir}/{path}.json"
+
+            # 检查文件是否存在
+            if os.path.exists(full_path):
+                # 存在则直接走获取文件数据的逻辑
+
+                # 判断数据格式是否为定制化数据，定制化数据则走分页逻辑
+                exist_content = seapig_mock.mock(full_path)
+                if isinstance(exist_content, dict) and isinstance(exist_content.get("data", {}), dict) and isinstance(exist_content.get("data", {}).get("records"), list):
+                    self.write(json.dumps(seapig_mock.seapig_query(
+                        full_path, {**data, **params}), cls=JsonEncoder))
+                else:
+                    # 不为定制格式数据则直接返回
+                    self.write(json.dumps(exist_content, cls=JsonEncoder))
             else:
                 # 不存在则走模拟数据库，“增删改查”的逻辑
                 valid_operation = ["create", "page"]
@@ -254,7 +275,7 @@ class MockHandler(BaseHandler):
             # 第二，判断数据结构是否符合定制化要求
             # 如果已有的数据结构符合要求的，则追加数据
             exist_content = seapig_mock.mock(mock_path)
-            if isinstance(exist_content, dict) and isinstance(exist_content.get("data", {}).get("records"), list):
+            if isinstance(exist_content, dict) and isinstance(exist_content.get("data", {}), dict) and isinstance(exist_content.get("data", {}).get("records"), list):
                 # 已有的数据结构符合要求后，需要判断新增的数据格式，根据不同的数据类型进行追加
                 # 情况一：数据为列表
                 if isinstance(data, list):
@@ -267,7 +288,7 @@ class MockHandler(BaseHandler):
                         {"code": StatusCode.OK, "msg": None, "data": {}}, cls=JsonEncoder))
 
                 # 情况二：指定数据格式为列表
-                elif isinstance(data.get("data", {}).get("records"), list):
+                elif isinstance(data.get("data", {}), dict) and isinstance(data.get("data", {}).get("records"), list):
                     exist_content["data"]["records"] = data.get("data", {}).get(
                         "records") + exist_content["data"]["records"]
                     json_data = json.dumps(exist_content, cls=JsonEncoder)
@@ -396,7 +417,7 @@ class MockHandler(BaseHandler):
                     {"code": StatusCode.OK, "msg": None, "data": {}}, cls=JsonEncoder))
 
             # 情况二：指定数据格式为列表
-            elif isinstance(data.get("data", {}).get("records"), list):
+            elif isinstance(data.get("data", {}), dict) and isinstance(data.get("data", {}).get("records"), list):
                 # 插入批量新值，并在每项值中插入 ID、IP 和时间
                 aggregation = [{**i, "id": uuid.uuid1(), "ip_addr": remote_ip, "create_time": create_time}
                                for i in data.get("data", {}).get("records")] + data_list
@@ -434,7 +455,7 @@ class MockHandler(BaseHandler):
                     {"code": StatusCode.OK, "msg": None, "data": {}}, cls=JsonEncoder))
 
             # 情况二：指定数据格式为列表
-            elif isinstance(data.get("data", {}).get("records"), list):
+            elif isinstance(data.get("data", {}), dict) and isinstance(data.get("data", {}).get("records"), list):
                 # 在每项值中插入 ID、IP 和时间
                 aggregation = [{**i, "id": uuid.uuid1(), "ip_addr": remote_ip, "create_time": create_time}
                                for i in data.get("data", {}).get("records")]
