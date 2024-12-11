@@ -28,8 +28,8 @@ def seapig_query(file_path, data):
         str(value) in str(item.get(key, "")) for key, value in filter_condition)]
 
     # 构建返回数据
-    size = data.get("size", 10)
-    current = data.get("current", 1)
+    size = int(data.get("size", 10))
+    current = int(data.get("current", 1))
     records = filter_data_list[(current - 1) * size: current * size]
     total = len(filter_data_list)
     pages = math.ceil(total / size)
