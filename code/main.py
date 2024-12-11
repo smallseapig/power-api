@@ -116,7 +116,7 @@ class MockHandler(BaseHandler):
 
                 # 判断数据格式是否为定制化数据，定制化数据则走分页逻辑
                 exist_content = seapig_mock.mock(full_path)
-                if isinstance(exist_content, dict) and isinstance(exist_content.get("data", {}).get("records"), list):
+                if isinstance(exist_content, dict) and isinstance(exist_content.get("data", {}), dict) and isinstance(exist_content.get("data", {}).get("records"), list):
                     self.write(json.dumps(seapig_mock.seapig_query(
                         full_path, data), cls=JsonEncoder))
                 else:
@@ -254,7 +254,7 @@ class MockHandler(BaseHandler):
             # 第二，判断数据结构是否符合定制化要求
             # 如果已有的数据结构符合要求的，则追加数据
             exist_content = seapig_mock.mock(mock_path)
-            if isinstance(exist_content, dict) and isinstance(exist_content.get("data", {}).get("records"), list):
+            if isinstance(exist_content, dict) and isinstance(exist_content.get("data", {}), dict) and isinstance(exist_content.get("data", {}).get("records"), list):
                 # 已有的数据结构符合要求后，需要判断新增的数据格式，根据不同的数据类型进行追加
                 # 情况一：数据为列表
                 if isinstance(data, list):
@@ -267,7 +267,7 @@ class MockHandler(BaseHandler):
                         {"code": StatusCode.OK, "msg": None, "data": {}}, cls=JsonEncoder))
 
                 # 情况二：指定数据格式为列表
-                elif isinstance(data.get("data", {}).get("records"), list):
+                elif isinstance(data.get("data", {}), dict) and isinstance(data.get("data", {}).get("records"), list):
                     exist_content["data"]["records"] = data.get("data", {}).get(
                         "records") + exist_content["data"]["records"]
                     json_data = json.dumps(exist_content, cls=JsonEncoder)
@@ -396,7 +396,7 @@ class MockHandler(BaseHandler):
                     {"code": StatusCode.OK, "msg": None, "data": {}}, cls=JsonEncoder))
 
             # 情况二：指定数据格式为列表
-            elif isinstance(data.get("data", {}).get("records"), list):
+            elif isinstance(data.get("data", {}), dict) and isinstance(data.get("data", {}).get("records"), list):
                 # 插入批量新值，并在每项值中插入 ID、IP 和时间
                 aggregation = [{**i, "id": uuid.uuid1(), "ip_addr": remote_ip, "create_time": create_time}
                                for i in data.get("data", {}).get("records")] + data_list
@@ -434,7 +434,7 @@ class MockHandler(BaseHandler):
                     {"code": StatusCode.OK, "msg": None, "data": {}}, cls=JsonEncoder))
 
             # 情况二：指定数据格式为列表
-            elif isinstance(data.get("data", {}).get("records"), list):
+            elif isinstance(data.get("data", {}), dict) and isinstance(data.get("data", {}).get("records"), list):
                 # 在每项值中插入 ID、IP 和时间
                 aggregation = [{**i, "id": uuid.uuid1(), "ip_addr": remote_ip, "create_time": create_time}
                                for i in data.get("data", {}).get("records")]
