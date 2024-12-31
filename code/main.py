@@ -9,6 +9,7 @@ import traceback
 import decimal
 import uuid
 from enum import Enum
+import ssl
 
 
 from utils import common
@@ -99,7 +100,7 @@ class MockHandler(BaseHandler):
                     self.write(json.dumps(exist_content, cls=JsonEncoder))
             else:
                 # 不存在则走模拟数据库的逻辑
-                get_id = self.get_argument('id', '')
+                get_id = self.get_argument("id", "")
 
                 valid_operation = ["get"]
                 dir_path = os.path.dirname(path)
@@ -224,8 +225,8 @@ class MockHandler(BaseHandler):
     def delete(self, path):
         try:
             data = json.loads(self.request.body) if self.request.body else {}
-            delete_id = self.get_argument('id', '')
-            delete_ids = self.get_argument('ids', '')
+            delete_id = self.get_argument("id", "")
+            delete_ids = self.get_argument("ids", "")
 
             valid_operation = ["delete"]
             dir_path = os.path.dirname(path)
@@ -520,12 +521,12 @@ class MockHandler(BaseHandler):
                         break
                 else:
                     self.write(json.dumps(
-                        {"code": StatusCode.NO_CONTENT, "msg": f"不存在 id 为 {data.get('id')} 的数据", "data": {}}, cls=JsonEncoder))
+                        {"code": StatusCode.NO_CONTENT, "msg": f"不存在 id 为 {data.get("id")} 的数据", "data": {}}, cls=JsonEncoder))
 
             else:
                 # 文件不存在，意味着数据为空，提示数据 ID 不存在
                 self.write(json.dumps(
-                    {"code": StatusCode.NO_CONTENT, "msg": f"不存在 id 为 {data.get('id')} 的数据", "data": {}}, cls=JsonEncoder))
+                    {"code": StatusCode.NO_CONTENT, "msg": f"不存在 id 为 {data.get("id")} 的数据", "data": {}}, cls=JsonEncoder))
         else:
             self.write(json.dumps(
                 {"code": StatusCode.BAD_REQUEST, "msg": "请指定更新的数据 id", "data": {}}, cls=JsonEncoder))
@@ -593,9 +594,22 @@ def run():
         debug=True
     )
     http_server = tornado.httpserver.HTTPServer(app)
+    
+    # 加载 SSL 证书和私钥
+    ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    ssl_ctx.load_cert_chain(certfile="server.cert", keyfile="server.key")
+
+    # 创建 HTTPServer 对象并配置为 HTTPS 服务器
+    https_server = tornado.httpserver.HTTPServer(app, ssl_options=ssl_ctx)
+
+    # 绑定端口并启动服务器
+    https_port = 34443
+    https_server.listen(https_port)
+    
     port = 34001
     http_server.listen(port)
     print(f"running on http://{get_server_ip()}:{port}")
+    print(f"running on https://{get_server_ip()}:{https_port}")
 
     tornado.ioloop.IOLoop.instance().start()
 
