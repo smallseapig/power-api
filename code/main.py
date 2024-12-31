@@ -42,7 +42,7 @@ class BaseHandler(tornado.web.RequestHandler):
 
     def options(self, *args):
         # 处理预检请求
-        self.set_status(204)
+        self.set_status(200)
         self.finish()
 
 
@@ -225,6 +225,7 @@ class MockHandler(BaseHandler):
         try:
             data = json.loads(self.request.body) if self.request.body else {}
             delete_id = self.get_argument('id', '')
+            delete_ids = self.get_argument('ids', '')
 
             valid_operation = ["delete"]
             dir_path = os.path.dirname(path)
@@ -237,7 +238,7 @@ class MockHandler(BaseHandler):
                 # 根据不同的操作，触发不同的方法
                 if operation == "delete":
                     self.trigger_delete(
-                        db_path, {**data, "delete_id": delete_id})
+                        db_path, {**data, "delete_id": delete_id, "delete_ids": delete_ids})
                 else:
                     pass
             else:
@@ -533,7 +534,7 @@ class MockHandler(BaseHandler):
         # 触发删除方法
 
         # 判断数据是否有各项 ID，如果没有，则不允许删除
-        if data.get("id") or data.get("ids", []) or data.get("delete_id"):
+        if data.get("id") or data.get("ids", []) or data.get("delete_id") or data.get("delete_ids"):
 
             # 检查模拟数据库文件是否存在
             if os.path.exists(db_path):
@@ -546,6 +547,8 @@ class MockHandler(BaseHandler):
                     # 将所有的 ID 都集中到一起删除
                     if data.get("ids", []):
                         delete_list.extend(data.get("ids", []))
+                    if data.get("delete_ids"):
+                        delete_list.extend(data.get("delete_ids").split(","))
                     if data.get("id"):
                         delete_list.append(data.get("id"))
                     if data.get("delete_id"):
