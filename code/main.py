@@ -43,7 +43,7 @@ class BaseHandler(tornado.web.RequestHandler):
 
     def options(self, *args):
         # 处理预检请求
-        self.set_status(200)
+        self.set_status(204)
         self.finish()
 
 
@@ -228,7 +228,7 @@ class MockHandler(BaseHandler):
             delete_id = self.get_argument("id", "")
             delete_ids = self.get_argument("ids", "")
 
-            valid_operation = ["delete"]
+            valid_operation = ["delete", "clear"]
             dir_path = os.path.dirname(path)
             base_path = os.path.basename(path)
             operation = base_path
@@ -240,6 +240,8 @@ class MockHandler(BaseHandler):
                 if operation == "delete":
                     self.trigger_delete(
                         db_path, {**data, "delete_id": delete_id, "delete_ids": delete_ids})
+                elif operation == "clear":
+                    self.trigger_clear(db_path)
                 else:
                     pass
             else:
@@ -410,7 +412,7 @@ class MockHandler(BaseHandler):
             # 情况一：数据为列表
             if isinstance(data, list):
                 # 插入批量新值，并在每项值中插入 ID、IP 和时间
-                aggregation = [{**i, "id": uuid.uuid1(), "ip_addr": remote_ip,
+                aggregation = [{"id": uuid.uuid1(), **i, "ip_addr": remote_ip,
                                 "create_time": create_time} for i in data] + data_list
                 json_data = json.dumps(aggregation, cls=JsonEncoder)
                 # 重写文件内容
@@ -421,7 +423,7 @@ class MockHandler(BaseHandler):
             # 情况二：指定数据格式为列表
             elif isinstance(data.get("data", {}), dict) and isinstance(data.get("data", {}).get("records"), list):
                 # 插入批量新值，并在每项值中插入 ID、IP 和时间
-                aggregation = [{**i, "id": uuid.uuid1(), "ip_addr": remote_ip, "create_time": create_time}
+                aggregation = [{"id": uuid.uuid1(), **i, "ip_addr": remote_ip, "create_time": create_time}
                                for i in data.get("data", {}).get("records")] + data_list
                 json_data = json.dumps(aggregation, cls=JsonEncoder)
                 # 重写文件内容
@@ -434,7 +436,7 @@ class MockHandler(BaseHandler):
                 random_id = uuid.uuid1()
                 # 插入新值
                 data_list.insert(
-                    0, {**data, "id": random_id, "ip_addr": remote_ip, "create_time": create_time})
+                    0, {"id": random_id, **data, "ip_addr": remote_ip, "create_time": create_time})
                 json_data = json.dumps(data_list, cls=JsonEncoder)
                 # 重写文件内容
                 common.write_file(db_path, json_data)
@@ -449,7 +451,7 @@ class MockHandler(BaseHandler):
             # 情况一：数据为列表
             if isinstance(data, list):
                 # 在每项值中插入 ID、IP 和时间
-                aggregation = [{**i, "id": uuid.uuid1(), "ip_addr": remote_ip, "create_time": create_time}
+                aggregation = [{"id": uuid.uuid1(), **i, "ip_addr": remote_ip, "create_time": create_time}
                                for i in data]
                 json_data = json.dumps(aggregation, cls=JsonEncoder)
                 common.write_file(db_path, json_data)
@@ -459,7 +461,7 @@ class MockHandler(BaseHandler):
             # 情况二：指定数据格式为列表
             elif isinstance(data.get("data", {}), dict) and isinstance(data.get("data", {}).get("records"), list):
                 # 在每项值中插入 ID、IP 和时间
-                aggregation = [{**i, "id": uuid.uuid1(), "ip_addr": remote_ip, "create_time": create_time}
+                aggregation = [{"id": uuid.uuid1(), **i, "ip_addr": remote_ip, "create_time": create_time}
                                for i in data.get("data", {}).get("records")]
                 json_data = json.dumps(aggregation, cls=JsonEncoder)
                 common.write_file(db_path, json_data)
@@ -470,7 +472,7 @@ class MockHandler(BaseHandler):
             else:
                 random_id = uuid.uuid1()
                 json_data = json.dumps(
-                    {**data, "id": random_id, "ip_addr": remote_ip, "create_time": create_time}, cls=JsonEncoder)
+                    {"id": random_id, **data, "ip_addr": remote_ip, "create_time": create_time}, cls=JsonEncoder)
                 common.write_file(db_path, f"[{json_data}]")
                 self.write(json.dumps(
                     {"code": StatusCode.OK, "msg": None, "data": random_id}, cls=JsonEncoder))
@@ -586,6 +588,20 @@ class MockHandler(BaseHandler):
             self.write(json.dumps(
                 {"code": StatusCode.BAD_REQUEST, "msg": "请指定删除的数据 id", "data": {}}, cls=JsonEncoder))
 
+    def trigger_clear(self, db_path):
+        # 触发数据清空方法
+        
+        file_list = common.get_file_path_list(self.db_dir)
+        if db_path in file_list:
+            # 删除文件
+            os.remove(db_path)
+            self.write(json.dumps(
+                {"code": StatusCode.OK, "msg": "删除成功", "data": {}}, cls=JsonEncoder))
+
+        else:
+            self.write(json.dumps(
+                {"code": StatusCode.NO_CONTENT, "msg": "不存在待删除的 API，无需删除", "data": {}}, cls=JsonEncoder))
+
 
 def run():
     app = tornado.web.Application(
@@ -594,7 +610,7 @@ def run():
         debug=True
     )
     http_server = tornado.httpserver.HTTPServer(app)
-    
+
     # 加载 SSL 证书和私钥
     ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     ssl_ctx.load_cert_chain(certfile="server.cert", keyfile="server.key")
@@ -605,7 +621,7 @@ def run():
     # 绑定端口并启动服务器
     https_port = 35443
     https_server.listen(https_port)
-    
+
     port = 35080
     http_server.listen(port)
     print(f"running on http://{get_server_ip()}:{port}")

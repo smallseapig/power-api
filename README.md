@@ -72,7 +72,7 @@
 
 ### 万能接口
 
-- 直接调用`http://localhost:8080/`的任意接口，支持后缀为`get`, `create`, `page`, `update`, `delete`的所有方法
+- 直接调用`http://localhost:8080/`的任意接口，支持后缀为`get`, `create`, `page`, `update`, `delete`, `clear`的所有方法
 
 #### 使用案例
 
@@ -86,10 +86,14 @@
 
 - 使用`POST`方法调用查询接口，`http://localhost:8080/power/page`
 
-- 使用`PUT`方法调用查询接口，`http://localhost:8080/power/update`
+- 使用`PUT`方法调用更新接口，`http://localhost:8080/power/update`
 
-- 使用`DELETE`方法调用查询接口，`http://localhost:8080/power/delete`
+- 使用`DELETE`方法调用删除接口，`http://localhost:8080/power/delete`
 
   - 支持`params`的`id`
   - 支持`body`的`id`
   - 支持`body`的`ids`，需要为数组
+
+- 使用`DELETE`方法调用删除接口，`http://localhost:8080/power/clear`
+
+  - 会直接**清空**当前接口的数据，请**谨慎**使用
